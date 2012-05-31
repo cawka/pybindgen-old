@@ -512,6 +512,15 @@ namespace xpto
     typedef Foo FooXpto;
 
     std::string get_foo_datum(FooXpto const &foo);
+
+    struct XptoClass 
+    {
+        SomeClass* GetSomeClass()
+        // -#- @return(caller_owns_return=true) -#-
+            {
+                return NULL;
+            }
+    };
 }
 
 // -#- @return(custodian=1, reference_existing_object=true); @other(transfer_ownership=false) -#-
@@ -1227,5 +1236,7 @@ public:
     ~IFooImpl() {}
 };
 
+
+int test_args_kwargs(const char *args, const char *kwargs);
 
 #endif 	    /* !FOO_H_ */

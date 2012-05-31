@@ -12,6 +12,8 @@ from pybindgen.function import CustomFunctionWrapper
 from pybindgen.cppmethod import CustomCppMethodWrapper
 from pybindgen import cppclass
 
+from pybindgen import param, retval
+
 import foomodulegen_common
 
 
@@ -296,6 +298,10 @@ int %s::custom_method_added_by_a_hook(int x)
 
     typehandlers.add_type_alias('uint32_t', 'xpto::FlowId')    
     xpto.add_function('get_flow_id', 'xpto::FlowId', [Parameter.new('xpto::FlowId', 'flowId')])
+
+    # bug #798383
+    XptoClass = xpto.add_struct('XptoClass')
+    XptoClass.add_method("GetSomeClass", retval("xpto::SomeClass*", caller_owns_return=True), [])
     
 
     ## ---- some implicity conversion APIs
@@ -585,6 +591,9 @@ int %s::custom_method_added_by_a_hook(int x)
     IFooImpl = mod.add_class("IFooImpl", parent=IFoo, destructor_visibility='public')
     IFooImpl.add_constructor([])
     IFooImpl.add_method("DoSomething", None, [], is_virtual=True)
+
+
+    mod.add_function("test_args_kwargs", "int", [param("const char *", "args"), param("const char *", "kwargs")])
 
     
     #### --- error handler ---
