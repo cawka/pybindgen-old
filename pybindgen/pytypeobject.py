@@ -106,52 +106,52 @@ class PyTypeObject(object):
 class PyNumberMethods(object):
     TEMPLATE = (
         'static PyNumberMethods %(variable)s = {\n'
-	'    (binaryfunc) %(nb_add)s,\n'
-	'    (binaryfunc) %(nb_subtract)s,\n'
-	'    (binaryfunc) %(nb_multiply)s,\n'
-	'    (binaryfunc) %(nb_divide)s,\n'
-	'    (binaryfunc) %(nb_remainder)s,\n'
-	'    (binaryfunc) %(nb_divmod)s,\n'
-	'    (ternaryfunc) %(nb_power)s,\n'
-	'    (unaryfunc) %(nb_negative)s,\n'
-	'    (unaryfunc) %(nb_positive)s,\n'
-	'    (unaryfunc) %(nb_absolute)s,\n'
-	'    (inquiry) %(nb_nonzero)s,\n'
-	'    (unaryfunc) %(nb_invert)s,\n'
-	'    (binaryfunc) %(nb_lshift)s,\n'
-	'    (binaryfunc) %(nb_rshift)s,\n'
-	'    (binaryfunc) %(nb_and)s,\n'
-	'    (binaryfunc) %(nb_xor)s,\n'
-	'    (binaryfunc) %(nb_or)s,\n'
-	'    (coercion) %(nb_coerce)s,\n'
-	'    (unaryfunc) %(nb_int)s,\n'
-	'    (unaryfunc) %(nb_long)s,\n'
-	'    (unaryfunc) %(nb_float)s,\n'
-	'    (unaryfunc) %(nb_oct)s,\n'
-	'    (unaryfunc) %(nb_hex)s,\n'
-	'    /* Added in release 2.0 */\n'
-	'    (binaryfunc) %(nb_inplace_add)s,\n'
-	'    (binaryfunc) %(nb_inplace_subtract)s,\n'
-	'    (binaryfunc) %(nb_inplace_multiply)s,\n'
-	'    (binaryfunc) %(nb_inplace_divide)s,\n'
-	'    (binaryfunc) %(nb_inplace_remainder)s,\n'
-	'    (ternaryfunc) %(nb_inplace_power)s,\n'
-	'    (binaryfunc) %(nb_inplace_lshift)s,\n'
-	'    (binaryfunc) %(nb_inplace_rshift)s,\n'
-	'    (binaryfunc) %(nb_inplace_and)s,\n'
-	'    (binaryfunc) %(nb_inplace_xor)s,\n'
-	'    (binaryfunc) %(nb_inplace_or)s,\n'
+        '    (binaryfunc) %(nb_add)s,\n'
+        '    (binaryfunc) %(nb_subtract)s,\n'
+        '    (binaryfunc) %(nb_multiply)s,\n'
+        '    (binaryfunc) %(nb_divide)s,\n'
+        '    (binaryfunc) %(nb_remainder)s,\n'
+        '    (binaryfunc) %(nb_divmod)s,\n'
+        '    (ternaryfunc) %(nb_power)s,\n'
+        '    (unaryfunc) %(nb_negative)s,\n'
+        '    (unaryfunc) %(nb_positive)s,\n'
+        '    (unaryfunc) %(nb_absolute)s,\n'
+        '    (inquiry) %(nb_nonzero)s,\n'
+        '    (unaryfunc) %(nb_invert)s,\n'
+        '    (binaryfunc) %(nb_lshift)s,\n'
+        '    (binaryfunc) %(nb_rshift)s,\n'
+        '    (binaryfunc) %(nb_and)s,\n'
+        '    (binaryfunc) %(nb_xor)s,\n'
+        '    (binaryfunc) %(nb_or)s,\n'
+        '    (coercion) %(nb_coerce)s,\n'
+        '    (unaryfunc) %(nb_int)s,\n'
+        '    (unaryfunc) %(nb_long)s,\n'
+        '    (unaryfunc) %(nb_float)s,\n'
+        '    (unaryfunc) %(nb_oct)s,\n'
+        '    (unaryfunc) %(nb_hex)s,\n'
+        '    /* Added in release 2.0 */\n'
+        '    (binaryfunc) %(nb_inplace_add)s,\n'
+        '    (binaryfunc) %(nb_inplace_subtract)s,\n'
+        '    (binaryfunc) %(nb_inplace_multiply)s,\n'
+        '    (binaryfunc) %(nb_inplace_divide)s,\n'
+        '    (binaryfunc) %(nb_inplace_remainder)s,\n'
+        '    (ternaryfunc) %(nb_inplace_power)s,\n'
+        '    (binaryfunc) %(nb_inplace_lshift)s,\n'
+        '    (binaryfunc) %(nb_inplace_rshift)s,\n'
+        '    (binaryfunc) %(nb_inplace_and)s,\n'
+        '    (binaryfunc) %(nb_inplace_xor)s,\n'
+        '    (binaryfunc) %(nb_inplace_or)s,\n'
         '\n'
-	'    /* Added in release 2.2 */\n'
-	'    /* The following require the Py_TPFLAGS_HAVE_CLASS flag */\n'
-	'    (binaryfunc) %(nb_floor_divide)s,\n'
-	'    (binaryfunc) %(nb_true_divide)s,\n'
-	'    (binaryfunc) %(nb_inplace_floor_divide)s,\n'
-	'    (binaryfunc) %(nb_inplace_true_divide)s,\n'
+        '    /* Added in release 2.2 */\n'
+        '    /* The following require the Py_TPFLAGS_HAVE_CLASS flag */\n'
+        '    (binaryfunc) %(nb_floor_divide)s,\n'
+        '    (binaryfunc) %(nb_true_divide)s,\n'
+        '    (binaryfunc) %(nb_inplace_floor_divide)s,\n'
+        '    (binaryfunc) %(nb_inplace_true_divide)s,\n'
         '\n'
         '#if PY_VERSION_HEX >= 0x020500F0\n'
-	'    /* Added in release 2.5 */\n'
-	'    (unaryfunc) %(nb_index)s,\n'
+        '    /* Added in release 2.5 */\n'
+        '    (unaryfunc) %(nb_index)s,\n'
         '\n'
         '#endif\n'
         '};\n'
@@ -167,45 +167,45 @@ class PyNumberMethods(object):
 
         slots = dict(self.slots)
 
-	slots.setdefault('nb_add', 'NULL')
-	slots.setdefault('nb_subtract', 'NULL')
-	slots.setdefault('nb_multiply', 'NULL')
-	slots.setdefault('nb_divide', 'NULL')
-	slots.setdefault('nb_remainder', 'NULL')
-	slots.setdefault('nb_divmod', 'NULL')
-	slots.setdefault('nb_power', 'NULL')
-	slots.setdefault('nb_negative', 'NULL')
-	slots.setdefault('nb_positive', 'NULL')
-	slots.setdefault('nb_absolute', 'NULL')
-	slots.setdefault('nb_nonzero', 'NULL')
-	slots.setdefault('nb_invert', 'NULL')
-	slots.setdefault('nb_lshift', 'NULL')
-	slots.setdefault('nb_rshift', 'NULL')
-	slots.setdefault('nb_and', 'NULL')
-	slots.setdefault('nb_xor', 'NULL')
+        slots.setdefault('nb_add', 'NULL')
+        slots.setdefault('nb_subtract', 'NULL')
+        slots.setdefault('nb_multiply', 'NULL')
+        slots.setdefault('nb_divide', 'NULL')
+        slots.setdefault('nb_remainder', 'NULL')
+        slots.setdefault('nb_divmod', 'NULL')
+        slots.setdefault('nb_power', 'NULL')
+        slots.setdefault('nb_negative', 'NULL')
+        slots.setdefault('nb_positive', 'NULL')
+        slots.setdefault('nb_absolute', 'NULL')
+        slots.setdefault('nb_nonzero', 'NULL')
+        slots.setdefault('nb_invert', 'NULL')
+        slots.setdefault('nb_lshift', 'NULL')
+        slots.setdefault('nb_rshift', 'NULL')
+        slots.setdefault('nb_and', 'NULL')
+        slots.setdefault('nb_xor', 'NULL')
         slots.setdefault('nb_or', 'NULL')
-	slots.setdefault('nb_coerce', 'NULL')
-	slots.setdefault('nb_int', 'NULL')
-	slots.setdefault('nb_long', 'NULL')
-	slots.setdefault('nb_float', 'NULL')
-	slots.setdefault('nb_oct', 'NULL')
-	slots.setdefault('nb_hex', 'NULL')
-	slots.setdefault('nb_inplace_add', 'NULL')
-	slots.setdefault('nb_inplace_subtract', 'NULL')
-	slots.setdefault('nb_inplace_multiply', 'NULL')
-	slots.setdefault('nb_inplace_divide', 'NULL')
-	slots.setdefault('nb_inplace_remainder', 'NULL')
-	slots.setdefault('nb_inplace_power', 'NULL')
-	slots.setdefault('nb_inplace_lshift', 'NULL')
-	slots.setdefault('nb_inplace_rshift', 'NULL')
-	slots.setdefault('nb_inplace_and', 'NULL')
-	slots.setdefault('nb_inplace_xor', 'NULL')
-	slots.setdefault('nb_inplace_or', 'NULL')
-	slots.setdefault('nb_floor_divide', 'NULL')
-	slots.setdefault('nb_true_divide', 'NULL')
-	slots.setdefault('nb_inplace_floor_divide', 'NULL')
-	slots.setdefault('nb_inplace_true_divide', 'NULL')
-	slots.setdefault('nb_index', 'NULL')
+        slots.setdefault('nb_coerce', 'NULL')
+        slots.setdefault('nb_int', 'NULL')
+        slots.setdefault('nb_long', 'NULL')
+        slots.setdefault('nb_float', 'NULL')
+        slots.setdefault('nb_oct', 'NULL')
+        slots.setdefault('nb_hex', 'NULL')
+        slots.setdefault('nb_inplace_add', 'NULL')
+        slots.setdefault('nb_inplace_subtract', 'NULL')
+        slots.setdefault('nb_inplace_multiply', 'NULL')
+        slots.setdefault('nb_inplace_divide', 'NULL')
+        slots.setdefault('nb_inplace_remainder', 'NULL')
+        slots.setdefault('nb_inplace_power', 'NULL')
+        slots.setdefault('nb_inplace_lshift', 'NULL')
+        slots.setdefault('nb_inplace_rshift', 'NULL')
+        slots.setdefault('nb_inplace_and', 'NULL')
+        slots.setdefault('nb_inplace_xor', 'NULL')
+        slots.setdefault('nb_inplace_or', 'NULL')
+        slots.setdefault('nb_floor_divide', 'NULL')
+        slots.setdefault('nb_true_divide', 'NULL')
+        slots.setdefault('nb_inplace_floor_divide', 'NULL')
+        slots.setdefault('nb_inplace_true_divide', 'NULL')
+        slots.setdefault('nb_index', 'NULL')
 
         code_sink.writeln(self.TEMPLATE % slots)
 
@@ -228,6 +228,7 @@ static PySequenceMethods %(variable)s = {
 '''
 
     FUNCTION_TEMPLATES = {
+        # __len__
         "sq_length" : '''
 static Py_ssize_t
 %(wrapper_name)s (%(py_struct)s *py_self)
@@ -237,6 +238,8 @@ static Py_ssize_t
 
     py_result = %(method_name)s(py_self);
     if (py_result == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "Unknown error in attempting to determine __len__.");
+        Py_XDECREF(py_result);
         return -1;
     }
     result = PyInt_AsSsize_t(py_result);
@@ -246,6 +249,7 @@ static Py_ssize_t
 
 ''',
 
+        # __len__
         # This hacky version is necessary 'cause if we're calling a function rather than a method
         # or an overloaded wrapper the args parameter gets tacked into the call sequence.
         "sq_length_ARGS" : '''
@@ -260,6 +264,8 @@ static Py_ssize_t
     py_result = %(method_name)s(py_self, args, NULL);
     Py_DECREF(args);
     if (py_result == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "Unknown error in attempting to determine __len__.");
+        Py_XDECREF(py_result);
         return -1;
     }
     result = PyInt_AsSsize_t(py_result);
@@ -269,6 +275,39 @@ static Py_ssize_t
 
 ''',
 
+        # __add__ (concatenation)
+        "sq_concat" : '''
+static PyObject*
+%(wrapper_name)s (%(py_struct)s *py_self, %(py_struct)s *py_rhs)
+{
+    PyObject *result;
+    PyObject *args;
+
+    args = Py_BuildValue("(O)", py_rhs);
+    result = %(method_name)s(py_self, args, NULL);
+    Py_DECREF(args);
+    return result;
+}
+
+''',
+
+        # __mul__ (repeat)
+        "sq_repeat" : '''
+static PyObject*
+%(wrapper_name)s (%(py_struct)s *py_self, Py_ssize_t py_i)
+{
+    PyObject *result;
+    PyObject *args;
+
+    args = Py_BuildValue("(i)", py_i);
+    result = %(method_name)s(py_self, args, NULL);
+    Py_DECREF(args);
+    return result;
+}
+
+''',
+
+        # __getitem__
         "sq_item" : '''
 static PyObject*
 %(wrapper_name)s (%(py_struct)s *py_self, Py_ssize_t py_i)
@@ -291,6 +330,29 @@ static PyObject*
 
 ''',
 
+        # __getslice__
+        "sq_slice" : '''
+static PyObject*
+%(wrapper_name)s (%(py_struct)s *py_self, Py_ssize_t py_i1, Py_ssize_t py_i2)
+{
+    PyObject *result;
+    PyObject *args;
+
+    args = Py_BuildValue("(ii)", py_i1, py_i2);
+    result = %(method_name)s(py_self, args, NULL);
+    Py_DECREF(args);
+    if (PyErr_ExceptionMatches(PyExc_IndexError) ||
+        PyErr_ExceptionMatches(PyExc_StopIteration)) {
+        Py_XDECREF(result);
+        return NULL;
+    } else {
+        return result;
+    }
+}
+
+''',
+
+        # __setitem__
         "sq_ass_item" : '''
 static int
 %(wrapper_name)s (%(py_struct)s *py_self, Py_ssize_t py_i, PyObject *py_val)
@@ -302,14 +364,102 @@ static int
     result = %(method_name)s(py_self, args, NULL);
     Py_DECREF(args);
     if (result == NULL) {
+        PyErr_SetString(PyExc_IndexError, "Unknown error trying to set value in container.");
+        return -1;
+    } else if (PyInt_Check(result) == 0) {
+        PyErr_SetString(PyExc_IndexError, "Error trying to set value in container -- wrapped method should return integer status.");
         return -1;
     } else {
+        int iresult = int(PyInt_AS_LONG(result));
         Py_DECREF(result);
-        return 0;
+        return iresult;
     }
 }
 
 ''',
+
+        # __setslice__
+        "sq_ass_slice" : '''
+static int
+%(wrapper_name)s (%(py_struct)s *py_self, Py_ssize_t py_i1, Py_ssize_t py_i2, %(py_struct)s *py_vals)
+{
+    PyObject *result;
+    PyObject *args;
+
+    args = Py_BuildValue("(iiO)", py_i1, py_i2, py_vals);
+    result = %(method_name)s(py_self, args, NULL);
+    Py_DECREF(args);
+    if (result == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "Unknown error trying to set slice in container.");
+        return -1;
+    } else if (PyInt_Check(result) == 0) {
+        PyErr_SetString(PyExc_RuntimeError, "Error trying to set slice in container -- wrapped method should return integer status.");
+        return -1;
+    } else {
+        int iresult = int(PyInt_AS_LONG(result));
+        Py_DECREF(result);
+        return iresult;
+    }
+}
+
+''',
+
+        # __contains__
+        "sq_contains" : '''
+static int
+%(wrapper_name)s (%(py_struct)s *py_self, PyObject *py_val)
+{
+    PyObject* result;
+    PyObject *args;
+
+    args = Py_BuildValue("(O)", py_val);
+    result = %(method_name)s(py_self, args, NULL);
+    Py_DECREF(args);
+    if (result == NULL or PyInt_Check(result) == 0) {
+        PyErr_SetString(PyExc_RuntimeError, "Unknown error in attempting to test __contains__.");
+        Py_XDECREF(result);
+        return -1;
+    } else {
+        int iresult = int(PyInt_AS_LONG(result));
+        Py_DECREF(result);
+        return iresult;
+    }
+}
+
+''',
+
+        # __iadd__ (in-place concatenation)
+        "sq_inplace_concat" : '''
+static PyObject*
+%(wrapper_name)s (%(py_struct)s *py_self, %(py_struct)s *py_rhs)
+{
+    PyObject *result;
+    PyObject *args;
+
+    args = Py_BuildValue("(O)", py_rhs);
+    result = %(method_name)s(py_self, args, NULL);
+    Py_DECREF(args);
+    return result;
+}
+
+''',
+
+        # __imul__ (in-place repeat)
+        "sq_inplace_repeat" : '''
+static PyObject*
+%(wrapper_name)s (%(py_struct)s *py_self, Py_ssize_t py_i)
+{
+    PyObject *result;
+    PyObject *args;
+
+    args = Py_BuildValue("(i)", py_i);
+    result = %(method_name)s(py_self, args, NULL);
+    Py_DECREF(args);
+    return result;
+}
+
+''',
+
         }
 
     def __init__(self):
@@ -322,16 +472,16 @@ static int
 
         slots = dict(self.slots)
 
-	slots.setdefault('sq_length', 'NULL')
-	slots.setdefault('sq_concat', 'NULL')
-	slots.setdefault('sq_repeat', 'NULL')
-	slots.setdefault('sq_item', 'NULL')
-	slots.setdefault('sq_slice', 'NULL')
-	slots.setdefault('sq_ass_item', 'NULL')
-	slots.setdefault('sq_ass_slice', 'NULL')
-	slots.setdefault('sq_contains', 'NULL')
-	slots.setdefault('sq_inplace_concat', 'NULL')
-	slots.setdefault('sq_inplace_repeat', 'NULL')
+        slots.setdefault('sq_length', 'NULL')
+        slots.setdefault('sq_concat', 'NULL')
+        slots.setdefault('sq_repeat', 'NULL')
+        slots.setdefault('sq_item', 'NULL')
+        slots.setdefault('sq_slice', 'NULL')
+        slots.setdefault('sq_ass_item', 'NULL')
+        slots.setdefault('sq_ass_slice', 'NULL')
+        slots.setdefault('sq_contains', 'NULL')
+        slots.setdefault('sq_inplace_concat', 'NULL')
+        slots.setdefault('sq_inplace_repeat', 'NULL')
 
         code_sink.writeln(self.TEMPLATE % slots)
 

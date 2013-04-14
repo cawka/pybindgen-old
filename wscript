@@ -50,24 +50,26 @@ def _get_version_from_bzr_lib(path):
     branch = bzrlib.branch.Branch.open('file://' + fullpath)
     tags = bzrlib.tag.BasicTags(branch)
     #print "Getting version information from bzr branch..."
-    history = branch.revision_history()
-    history.reverse()
-    ## find closest tag
-    version = None
-    extra_version = []
-    for revid in history:
-        #print revid
-        for tag_name, tag_revid in tags.get_tag_dict().iteritems():
-            if tag_revid == revid:
-                #print "%s matches tag %s" % (revid, tag_name)
-                version = [int(s) for s in tag_name.split('.')]
-                ## if the current revision does not match the last
-                ## tag, we append current revno to the version
-                if tag_revid != branch.last_revision():
-                    extra_version = [branch.revno()]
+    branch.lock_read()
+    try:
+        history = branch.iter_merge_sorted_revisions(direction="reverse")
+        version = None
+        extra_version = []
+        for revid, depth, revno, end_of_merge in history:
+            for tag_name, tag_revid in tags.get_tag_dict().iteritems():
+                #print tag_revid, "<==>", revid
+                if tag_revid == revid:
+                    #print "%s matches tag %s" % (revid, tag_name)
+                    version = [int(s) for s in tag_name.split('.')]
+                    ## if the current revision does not match the last
+                    ## tag, we append current revno to the version
+                    if tag_revid != branch.last_revision():
+                        extra_version = [branch.revno()]
+                    break
+            if version:
                 break
-        if version:
-            break
+    finally:
+        branch.unlock()
     assert version is not None
     _version = version + extra_version
     return _version
@@ -156,46 +158,6 @@ def zipper(dir, zip_file, archive_main_folder=None):
     zip.close()
 
 
-def dist_hook():
-    blddir = '../build'
-    srcdir = '..'
-    version = get_version(srcdir)
-    subprocess.Popen([os.path.join(srcdir, "generate-ChangeLog")],  shell=True).wait()
-    try:
-        os.chmod(os.path.join(srcdir, "ChangeLog"), 0644)
-    except OSError:
-        pass
-    try:
-        os.unlink("ChangeLog")
-    except OSError:
-        pass
-    shutil.copy(os.path.join(srcdir, "ChangeLog"), '.')
-
-    ## Write a pybindgen/version.py file containing the project version
-    generate_version_py(force=True, path=srcdir)
-
-    ## Copy it to the source dir
-    shutil.copy(os.path.join('pybindgen', 'version.py'), os.path.join(srcdir, "pybindgen"))
-
-    ## Package the api docs in a separate tarball
-    apidocs = 'apidocs'
-    if not os.path.isdir('doc/_build/html'):
-        Logs.warn("Not creating docs archive: the `doc/_build/html' directory does not exist")
-    else:
-        zipper('doc/_build/html', os.path.join("..", "pybindgen-%s-docs.zip" % version))
-
-    # clean up the docs dir
-    r = subprocess.Popen(["make", "clean"], cwd='doc').wait()
-    if r:
-        raise SystemExit(r)
-
-    shutil.rmtree('.shelf', True)
-
-    try:
-        os.unlink('waf-light')
-    except OSError:
-        pass
-
 
 def options(opt):
     opt.tool_options('python')
@@ -280,10 +242,20 @@ def _check_compilation_flag(conf, flag, mode='cxx', linkflags=None):
     return ok
 
 
+# starting with waf 1.6, conf.check() becomes fatal by default if the
+# test fails, this alternative method makes the test non-fatal, as it
+# was in waf <= 1.5
+def _check_nonfatal(conf, *args, **kwargs):
+    try:
+        return conf.check(*args, **kwargs)
+    except conf.errors.ConfigurationError:
+        return None
+
 
 def configure(conf):
 
     conf.check_compilation_flag = types.MethodType(_check_compilation_flag, conf)
+    conf.check_nonfatal = types.MethodType(_check_nonfatal, conf)
 
     ## Write a pybindgen/version.py file containing the project version
     generate_version_py()
@@ -321,8 +293,11 @@ def configure(conf):
             conf.env.append_value('CCFLAGS_PYEXT', '-fvisibility=hidden')
 
         # Add include path for our stdint.h replacement, if needed (pstdint.h)
-        if not conf.check(header_name='stdint.h'):
+        if not conf.check_nonfatal(header_name='stdint.h'):
             conf.env.append_value('CPPPATH', os.path.join(conf.curdir, 'include'))
+
+    if conf.check_nonfatal(header_name='boost/shared_ptr.hpp'):
+        conf.env['ENABLE_BOOST_SHARED_PTR'] = True
 
     conf.sub_config('benchmarks')
     conf.sub_config('examples')
@@ -368,7 +343,7 @@ def bench(bld):
         raise SystemExit(retval)
 
 
-from waflib import Context, Build
+from waflib import Context, Build, Scripting
 class CheckContext(Context.Context):
     """run the unit tests"""
     cmd = 'check'
@@ -398,35 +373,91 @@ class CheckContext(Context.Context):
 
         env = bld.env
 
+        retvals = []
+
         if env['CXX']:
             print "Running manual module generation unit tests (module foo)..."
-            retval2 = subprocess.Popen(valgrind + [python, 'tests/footest.py', '1'] + verbosity).wait()
+            retvals.append(subprocess.Popen(valgrind + [python, 'tests/footest.py', '1'] + verbosity).wait())
         else:
             print "Skipping manual module generation unit tests (no C/C++ compiler)..."
-            retval2 = 0
 
         if env['ENABLE_PYGCCXML']:
             print "Running automatically scanned module generation unit tests (module foo2)..."
-            retval3 = subprocess.Popen(valgrind + [python, 'tests/footest.py', '2'] + verbosity).wait()
+            retvals.append(subprocess.Popen(valgrind + [python, 'tests/footest.py', '2'] + verbosity).wait())
 
             print "Running module generated by automatically generated python script unit tests (module foo3)..."
-            retval3b = subprocess.Popen(valgrind + [python, 'tests/footest.py', '3'] + verbosity).wait()
+            retvals.append(subprocess.Popen(valgrind + [python, 'tests/footest.py', '3'] + verbosity).wait())
 
             print "Running module generated by generated and split python script unit tests  (module foo4)..."
-            retval3c = subprocess.Popen(valgrind + [python, 'tests/footest.py', '4'] + verbosity).wait()
+            retvals.append(subprocess.Popen(valgrind + [python, 'tests/footest.py', '4'] + verbosity).wait())
 
             print "Running semi-automatically scanned c-hello module ('hello')..."
-            retval4 = subprocess.Popen(valgrind + [python, 'tests/c-hello/hellotest.py'] + verbosity).wait()
+            retvals.append(subprocess.Popen(valgrind + [python, 'tests/c-hello/hellotest.py'] + verbosity).wait())
         else:
             print "Skipping automatically scanned module generation unit tests (pygccxml missing)..."
             print "Skipping module generated by automatically generated python script unit tests (pygccxml missing)..."
             print "Skipping module generated by generated and split python script unit tests  (pygccxml missing)..."
             print "Skipping semi-automatically scanned c-hello module (pygccxml missing)..."
-            retval3 = retval3b = retval3c = retval4 = 0
 
-        if retval1 or retval2 or retval3 or retval3b or retval3c or retval4:
+        if env['ENABLE_BOOST_SHARED_PTR']:
+            print "Running boost::shared_ptr unit tests..."
+            retvals.append(subprocess.Popen(valgrind + [python, 'tests/boost/bartest.py'] + verbosity).wait())
+        else:
+            print "Skipping boost::shared_ptr unit tests (boost headers not found)..."
+
+        if any(retvals):
             Logs.error("Unit test failures")
             raise SystemExit(2)
+
+
+
+class DistContext(Scripting.Dist):
+
+    cmd = 'dist'
+    def get_base_name(self):
+        srcdir = '.'
+        version = get_version(srcdir)
+        return "pybindgen-" + version
+
+
+    def execute(self):
+        blddir = './build'
+        srcdir = '.'
+        version = get_version(srcdir)
+        subprocess.Popen([os.path.join(srcdir, "generate-ChangeLog")],  shell=True).wait()
+        try:
+            os.chmod(os.path.join(srcdir, "ChangeLog"), 0644)
+        except OSError:
+            pass
+
+        ## Write a pybindgen/version.py file containing the project version
+        generate_version_py(force=True, path=srcdir)
+
+
+        ## Package the api docs in a separate tarball
+
+        # generate the docs first
+        r = subprocess.Popen(["make", "html"], cwd='doc').wait()
+        if r:
+            raise SystemExit(r)
+
+        apidocs = 'apidocs'
+        if not os.path.isdir('doc/_build/html'):
+            Logs.warn("Not creating docs archive: the `doc/_build/html' directory does not exist")
+        else:
+            zipper('doc/_build/html', "pybindgen-%s-docs.zip" % version)
+
+
+        try:
+            os.unlink('waf-light')
+        except OSError:
+            pass
+
+        super(DistContext, self).execute() # -----------------------------
+
+    def get_excl(self):
+        return super(DistContext, self).get_excl() + ' *.zip doc/_build .shelf *.pstat'
+
 
 
 def docs(ctx):

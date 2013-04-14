@@ -13,6 +13,8 @@ from cppattribute import CppInstanceAttributeGetter, CppInstanceAttributeSetter,
     CppStaticAttributeGetter, CppStaticAttributeSetter, \
     PyGetSetDef, PyMetaclass
 
+from cppcustomattribute import CppCustomInstanceAttributeGetter, CppCustomInstanceAttributeSetter
+
 from pytypeobject import PyTypeObject, PyNumberMethods, PySequenceMethods
 
 import settings
@@ -74,6 +76,18 @@ class MemoryPolicy(object):
         """
         raise NotImplementedError
 
+    def get_pointer_type(self, class_full_name):
+        return "%s *" % (class_full_name,)
+
+    def get_instance_creation_function(self):
+        return default_instance_creation_function
+
+    def get_delete_code(self, cpp_class):
+        raise NotImplementedError
+
+    def get_pystruct_init_code(self, cpp_class, obj):
+        return ''
+        
 
 class ReferenceCountingPolicy(MemoryPolicy):
     def write_incref(self, code_block, obj_expr):
@@ -108,8 +122,14 @@ class ReferenceCountingMethodsPolicy(ReferenceCountingPolicy):
     def write_decref(self, code_block, obj_expr):
         code_block.write_code('%s->%s();' % (obj_expr, self.decref_method))
 
-    def get_free_code(self, obj_expr):
-        return ('%s->%s();' % (obj_expr, self.decref_method))
+    def get_delete_code(self, cpp_class):
+        delete_code = ("if (self->obj) {\n"
+                       "    %s *tmp = self->obj;\n"
+                       "    self->obj = NULL;\n"
+                       "    tmp->%s();\n"
+                       "}"
+                       % (cpp_class.full_name, self.decref_method))
+        return delete_code
 
     def __repr__(self):
         return 'cppclass.ReferenceCountingMethodsPolicy(incref_method=%r, decref_method=%r, peekref_method=%r)' \
@@ -129,8 +149,14 @@ class ReferenceCountingFunctionsPolicy(ReferenceCountingPolicy):
     def write_decref(self, code_block, obj_expr):
         code_block.write_code('%s(%s);' % (self.decref_function, obj_expr))
 
-    def get_free_code(self, obj_expr):
-        return ('%s(%s);' % (self.decref_function, obj_expr))
+    def get_delete_code(self, cpp_class):
+        delete_code = ("if (self->obj) {\n"
+                       "    %s *tmp = self->obj;\n"
+                       "    self->obj = NULL;\n"
+                       "    %s(tmp);\n"
+                       "}"
+                       % (cpp_class.full_name, self.decref_function))
+        return delete_code
 
     def __repr__(self):
         return 'cppclass.ReferenceCountingFunctionsPolicy(incref_function=%r, decref_function=%r, peekref_function=%r)' \
@@ -141,11 +167,45 @@ class FreeFunctionPolicy(MemoryPolicy):
         super(FreeFunctionPolicy, self).__init__()
         self.free_function = free_function
 
-    def get_free_code(self, obj_expr):
-        return ('%s(%s);' % (self.free_function, obj_expr))
+
+    def get_delete_code(self, cpp_class):
+        delete_code = ("if (self->obj) {\n"
+                       "    %s *tmp = self->obj;\n"
+                       "    self->obj = NULL;\n"
+                       "    %s(tmp);\n"
+                       "}"
+                       % (cpp_class.full_name, self.free_function))
+        return delete_code
 
     def __repr__(self):
         return 'cppclass.FreeFunctionPolicy(%r)' % self.free_function
+
+
+
+class SmartPointerPolicy(MemoryPolicy):
+    pointer_name = None # class should fill this or create descriptor/getter
+
+class BoostSharedPtr(SmartPointerPolicy):
+    def __init__(self, class_name):
+        """
+        Create a memory policy for using boost::shared_ptr<> to manage instances of this object.
+
+        :param class_name: the full name of the class, e.g. foo::Bar
+        """
+        self.class_name = class_name
+        self.pointer_name = '::boost::shared_ptr< %s >' % (self.class_name,)
+
+    def get_delete_code(self, cpp_class):
+        return "self->obj.~shared_ptr< %s >();" % (self.class_name,)
+
+    def get_pointer_type(self, class_full_name):
+        return self.pointer_name + ' '
+
+    def get_instance_creation_function(self):
+        return boost_shared_ptr_instance_creation_function
+
+    def get_pystruct_init_code(self, cpp_class, obj):
+        return "new(&%s->obj) %s;" % (obj, self.pointer_name,)
 
 
 def default_instance_creation_function(cpp_class, code_block, lvalue,
@@ -170,6 +230,30 @@ def default_instance_creation_function(cpp_class, code_block, lvalue,
                                   % cpp_class.full_name)
     code_block.write_code(
         "%s = new %s(%s);" % (lvalue, construct_type_name, parameters))
+
+
+def boost_shared_ptr_instance_creation_function(cpp_class, code_block, lvalue,
+                                                parameters, construct_type_name):
+    """
+    boost::shared_ptr "instance creation function"; it is called whenever a new
+    C++ class instance needs to be created
+
+    :param cpp_class: the CppClass object whose instance is to be created
+    :param code_block: CodeBlock object on which the instance creation code should be generated
+    :param lvalue: lvalue expression that should hold the result in the end
+    :param parameters: stringified list of parameters
+    :param construct_type_name: actual name of type to be constructed (it is
+                          not always the class name, sometimes it's
+                          the python helper class)
+    """
+    assert lvalue
+    assert not lvalue.startswith('None')
+    if cpp_class.incomplete_type:
+        raise CodeGenerationError("%s cannot be constructed (incomplete type)"
+                                  % cpp_class.full_name)
+    code_block.write_code(
+        "%s.reset (new %s(%s));" % (lvalue, construct_type_name, parameters))
+
 
 
 class CppHelperClass(object):
@@ -560,7 +644,16 @@ class CppClass(object):
         self.binary_numeric_operators = dict()
         self.inplace_numeric_operators = dict()
         self.unary_numeric_operators = dict()
-        self.valid_sequence_methods = ("__len__", "__getitem__", "__setitem__")
+        self.valid_sequence_methods = {"__len__"       : "sq_length",
+                                       "__add__"       : "sq_concat",
+                                       "__mul__"       : "sq_repeat",
+                                       "__getitem__"   : "sq_item",
+                                       "__getslice__"  : "sq_slice",
+                                       "__setitem__"   : "sq_ass_item",
+                                       "__setslice__"  : "sq_ass_slice",
+                                       "__contains__"  : "sq_contains",
+                                       "__iadd__"      : "sq_inplace_concat",
+                                       "__imul__"      : "sq_inplace_repeat"}
 
         ## list of CppClasses from which a value of this class can be
         ## implicitly generated; corresponds to a
@@ -677,25 +770,50 @@ class CppClass(object):
             except ValueError:
                 pass
 
-            class ThisClassPtrParameter(CppClassPtrParameter):
-                """Register this C++ class as pass-by-pointer parameter"""
-                CTYPES = []
-                cpp_class = self
-            self.ThisClassPtrParameter = ThisClassPtrParameter
-            try:
-                param_type_matcher.register(name+'*', self.ThisClassPtrParameter)
-            except ValueError:
-                pass
+            if isinstance(self.memory_policy, BoostSharedPtr): # boost::shared_ptr<Class>
 
-            class ThisClassPtrReturn(CppClassPtrReturnValue):
-                """Register this C++ class as pointer return"""
-                CTYPES = []
-                cpp_class = self
-            self.ThisClassPtrReturn = ThisClassPtrReturn
-            try:
-                return_type_matcher.register(name+'*', self.ThisClassPtrReturn)
-            except ValueError:
-                pass
+                class ThisClassSharedPtrParameter(CppClassSharedPtrParameter):
+                    """Register this C++ class as pass-by-pointer parameter"""
+                    CTYPES = []
+                    cpp_class = self
+                self.ThisClassSharedPtrParameter = ThisClassSharedPtrParameter
+                try:
+                    param_type_matcher.register(self.memory_policy.pointer_name, self.ThisClassSharedPtrParameter)
+                except ValueError:
+                    pass
+
+                class ThisClassSharedPtrReturn(CppClassSharedPtrReturnValue):
+                    """Register this C++ class as pointer return"""
+                    CTYPES = []
+                    cpp_class = self
+                self.ThisClassSharedPtrReturn = ThisClassSharedPtrReturn
+                try:
+                    return_type_matcher.register(self.memory_policy.pointer_name, self.ThisClassSharedPtrReturn)
+                except ValueError:
+                    pass
+
+            else: # Regular pointer
+
+                class ThisClassPtrParameter(CppClassPtrParameter):
+                    """Register this C++ class as pass-by-pointer parameter"""
+                    CTYPES = []
+                    cpp_class = self
+                self.ThisClassPtrParameter = ThisClassPtrParameter
+                try:
+                    param_type_matcher.register(name+'*', self.ThisClassPtrParameter)
+                except ValueError:
+                    pass
+
+                class ThisClassPtrReturn(CppClassPtrReturnValue):
+                    """Register this C++ class as pointer return"""
+                    CTYPES = []
+                    cpp_class = self
+                self.ThisClassPtrReturn = ThisClassPtrReturn
+                try:
+                    return_type_matcher.register(name+'*', self.ThisClassPtrReturn)
+                except ValueError:
+                    pass
+
 
             class ThisClassRefReturn(CppClassRefReturnValue):
                 """Register this C++ class as reference return"""
@@ -977,6 +1095,8 @@ class CppClass(object):
         for cls in self.get_mro():
             if cls.instance_creation_function is not None:
                 return cls.instance_creation_function
+        if cls.memory_policy is not None:
+            return cls.memory_policy.get_instance_creation_function()
         return default_instance_creation_function
 
     def get_post_instance_creation_function(self):
@@ -1128,15 +1248,27 @@ class CppClass(object):
             return_type_matcher.register(alias, self.ThisClassReturn)
         except ValueError: pass
         
-        self.ThisClassPtrParameter.CTYPES.append(alias+'*')
-        try:
-            param_type_matcher.register(alias+'*', self.ThisClassPtrParameter)
-        except ValueError: pass
-        
-        self.ThisClassPtrReturn.CTYPES.append(alias+'*')
-        try:
-            return_type_matcher.register(alias+'*', self.ThisClassPtrReturn)
-        except ValueError: pass
+        if isinstance(self.memory_policy, BoostSharedPtr):
+            alias_ptr = 'boost::shared_ptr< %s >' % alias
+            self.ThisClassSharedPtrParameter.CTYPES.append(alias_ptr)
+            try:
+                param_type_matcher.register(alias_ptr, self.ThisClassSharedPtrParameter)
+            except ValueError: pass
+
+            self.ThisClassSharedPtrReturn.CTYPES.append(alias_ptr)
+            try:
+                return_type_matcher.register(alias_ptr, self.ThisClassSharedPtrReturn)
+            except ValueError: pass
+        else:
+            self.ThisClassPtrParameter.CTYPES.append(alias+'*')
+            try:
+                param_type_matcher.register(alias+'*', self.ThisClassPtrParameter)
+            except ValueError: pass
+
+            self.ThisClassPtrReturn.CTYPES.append(alias+'*')
+            try:
+                return_type_matcher.register(alias+'*', self.ThisClassPtrReturn)
+            except ValueError: pass
 
         self.ThisClassRefReturn.CTYPES.append(alias)
         try:
@@ -1210,7 +1342,7 @@ class CppClass(object):
 #include <map>
 #include <string>
 #include <typeinfo>
-#if defined(__GNUC__) && __GNUC__ >= 3
+#if defined(__GNUC__) && __GNUC__ >= 3 && !defined(__clang__)
 # include <cxxabi.h>
 #endif
 
@@ -1252,7 +1384,7 @@ public:
        if (python_wrapper)
            return python_wrapper;
        else {
-#if defined(__GNUC__) && __GNUC__ >= 3
+#if defined(__GNUC__) && __GNUC__ >= 3 && !defined(__clang__)
 
            // Get closest (in the single inheritance tree provided by cxxabi.h)
            // registered python wrapper.
@@ -1601,6 +1733,43 @@ public:
             setter.stack_where_defined = traceback.extract_stack()
         self.static_attributes.add_attribute(name, getter, setter)
 
+    def add_custom_instance_attribute(self, name, value_type, getter, is_const=False, setter=None,
+                                      getter_template_parameters=[],
+                                      setter_template_parameters=[]):
+        """
+        :param value_type: a ReturnValue object
+        :param name: attribute name (i.e. the name of the class member variable)
+        :param is_const: True if the attribute is const, i.e. cannot be modified
+        :param getter: None, or name of a method of this class used to get the value
+        :param setter: None, or name of a method of this class used to set the value
+        :param getter_template_parameters: optional list of template parameters for getter function
+        :param setter_template_parameters: optional list of template parameters for setter function
+        """
+
+        ## backward compatibility check
+        if isinstance(value_type, str) and isinstance(name, ReturnValue):
+            warnings.warn("add_custom_instance_attribute has changed API; see the API documentation (but trying to correct...)",
+                          DeprecationWarning, stacklevel=2)
+            value_type, name = name, value_type
+
+        try:
+            value_type = utils.eval_retval(value_type, None)
+        except utils.SkipWrapper:
+            return
+
+        assert isinstance(value_type, ReturnValue)
+        getter_wrapper = CppCustomInstanceAttributeGetter(value_type, self, name, getter=getter,
+                                                          template_parameters = getter_template_parameters)
+        getter_wrapper.stack_where_defined = traceback.extract_stack()
+        if is_const:
+            setter_wrapper = None
+            assert setter is None
+        else:
+            setter_wrapper = CppCustomInstanceAttributeSetter(value_type, self, name, setter=setter,
+                                                              template_parameters = setter_template_parameters)
+            setter_wrapper.stack_where_defined = traceback.extract_stack()
+        self.instance_attributes.add_attribute(name, getter_wrapper, setter_wrapper)
+
     def add_instance_attribute(self, name, value_type, is_const=False,
                                getter=None, setter=None):
         """
@@ -1665,25 +1834,30 @@ public:
         structures.
         """
 
+        if self.memory_policy is not None:
+            pointer_type = self.memory_policy.get_pointer_type(self.full_name)
+        else:
+            pointer_type = self.full_name + " *"
+
         if self.allow_subclassing:
             code_sink.writeln('''
 typedef struct {
     PyObject_HEAD
-    %s *obj;
+    %sobj;
     PyObject *inst_dict;
     PyBindGenWrapperFlags flags:8;
 } %s;
-    ''' % (self.full_name, self.pystruct))
+    ''' % (pointer_type, self.pystruct))
 
         else:
 
             code_sink.writeln('''
 typedef struct {
     PyObject_HEAD
-    %s *obj;
+    %sobj;
     PyBindGenWrapperFlags flags:8;
 } %s;
-    ''' % (self.full_name, self.pystruct))
+    ''' % (pointer_type, self.pystruct))
 
         code_sink.writeln()
 
@@ -1865,6 +2039,9 @@ typedef struct {
         #self._generate_tp_hash(code_sink)
         #self._generate_tp_compare(code_sink)
 
+        #if self.slots.get("tp_hash", "NULL") == "NULL":
+        #    self.slots["tp_hash"] = self._generate_tp_hash(code_sink)
+
         if self.slots.get("tp_richcompare", "NULL") == "NULL":
             self.slots["tp_richcompare"] = self._generate_tp_richcompare(code_sink)
 
@@ -2025,11 +2202,9 @@ typedef struct {
                                               'method_name'    : meth_wrapper_actual_name})
                 return
 
-        for (py_name, slot_name) in [("__len__", "sq_length"),
-                                     ("__getitem__", "sq_item"),
-                                     ("__setitem__", "sq_ass_item")]:
+        for py_name in self.valid_sequence_methods:
+            slot_name = self.valid_sequence_methods[py_name]
             try_wrap_sequence_method(py_name, slot_name)
-            
 
         pysequencemethods.generate(code_sink)
         return '&' + sequence_methods_var_name
@@ -2135,14 +2310,8 @@ static PyObject*\n%s(%s *self)
         declarations = DeclarationsScope()
         code_block = CodeBlock("return NULL;", declarations)
 
-        if self.allow_subclassing:
-            new_func = 'PyObject_GC_New'
-        else:
-            new_func = 'PyObject_New'
-
         py_copy = declarations.declare_variable("%s*" % self.pystruct, "py_copy")
-        code_block.write_code("%s = %s(%s, %s);" %
-                              (py_copy, new_func, self.pystruct, '&'+self.pytypestruct))
+        self.write_allocate_pystruct(code_block, py_copy)
         code_block.write_code("%s->obj = new %s(*self->obj);" % (py_copy, construct_name))
         if self.allow_subclassing:
             code_block.write_code("%s->inst_dict = NULL;" % py_copy)
@@ -2170,7 +2339,7 @@ static PyObject*\n%s(%s *self)
             for method_name, parent_overload in base.methods.iteritems():
 
                 # skip methods registered via special type slots, not method table
-                if method_name in ['__call__', "__len__", "__getitem__", "__setitem__"]:
+                if method_name in (['__call__'] + list(self.valid_sequence_methods)):
                     continue
 
                 try:
@@ -2244,8 +2413,7 @@ static PyObject*\n%s(%s *self)
             except utils.SkipWrapper:
                 continue
             # skip methods registered via special type slots, not method table
-            if meth_name not in ['__call__', "__len__",
-                                 "__getitem__", "__setitem__"]:
+            if meth_name not in (['__call__'] + list(self.valid_sequence_methods)):
                 method_defs.append(overload.get_py_method_def(meth_name))
             code_sink.writeln()
         method_defs.extend(parent_caller_methods)
@@ -2276,12 +2444,7 @@ static PyObject*\n%s(%s *self)
             delete_code = ''
         else:
             if self.memory_policy is not None:
-                delete_code = ("if (self->obj) {\n"
-                               "    %s *tmp = self->obj;\n"
-                               "    self->obj = NULL;\n"
-                               "    %s\n"
-                               "}"
-                               % (self.full_name, self.memory_policy.get_free_code('tmp')))
+                delete_code = self.memory_policy.get_delete_code(self)
             else:
                 if self.incomplete_type:
                     raise CodeGenerationError("Cannot finish generating class %s: "
@@ -2372,6 +2535,7 @@ static long
 }
 
 ''' % (tp_hash_function_name, self.pystruct))
+        return tp_hash_function_name
 
     def _generate_tp_compare(self, code_sink):
         """generates a tp_compare function, which compares the ->obj pointers"""
@@ -2486,10 +2650,31 @@ if (!PyObject_IsInstance((PyObject*) other, (PyObject*) &%s)) {
             'PyModule_AddObject(m, (char *) \"%s\", (PyObject *) &%s);' % (
                 alias, self.pytypestruct))
         
-
+    def write_allocate_pystruct(self, code_block, lvalue, wrapper_type=None):
+        """
+        Generates code to allocate a python wrapper structure, using
+        PyObject_New or PyObject_GC_New, plus some additional strcture
+        initialization that may be needed.
+        """
+        if self.allow_subclassing:
+            new_func = 'PyObject_GC_New'
+        else:
+            new_func = 'PyObject_New'
+        if wrapper_type is None:
+            wrapper_type = '&'+self.pytypestruct
+        code_block.write_code("%s = %s(%s, %s);" %
+                              (lvalue, new_func, self.pystruct, wrapper_type))
+        if self.allow_subclassing:
+            code_block.write_code(
+                "%s->inst_dict = NULL;" % (lvalue,))
+        if self.memory_policy is not None:
+            code_block.write_code(self.memory_policy.get_pystruct_init_code(self, lvalue))
+        
 
 from cppclass_typehandlers import CppClassParameter, CppClassRefParameter, \
-    CppClassReturnValue, CppClassRefReturnValue, CppClassPtrParameter, CppClassPtrReturnValue, CppClassParameterBase
+    CppClassReturnValue, CppClassRefReturnValue, CppClassPtrParameter, CppClassPtrReturnValue, CppClassParameterBase, \
+    CppClassSharedPtrParameter, CppClassSharedPtrReturnValue
+
 import function
 
 from cppmethod import CppMethod, CppConstructor, CppNoConstructor, CppFunctionAsConstructor, \
